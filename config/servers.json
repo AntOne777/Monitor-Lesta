@@ -1,0 +1,556 @@
+{
+ "clusters": {
+  "list": {
+   "9": {
+    "api": "EU2",
+    "visible": [
+     false,false,false,false,false,false],
+    "address": "login.p2.worldoftanks.eu",
+    "name": "EU2",
+    "color": [
+     [
+      235,145,0],[
+      235,145,0],[
+      235,145,0],[
+      235,145,0],[
+      235,145,0],[
+      235,145,0]],
+    "place": "Luxembourg: Luxembourg"
+   },
+   "8": {
+    "api": "EU1",
+    "visible": [
+     false,false,false,false,false,false],
+    "address": "login.p1.worldoftanks.eu",
+    "name": "EU1",
+    "color": [
+     [
+      0,0,0],[
+      0,0,0],[
+      0,0,0],[
+      0,0,0],[
+      0,0,0],[
+      0,0,0]],
+    "place": "Netherlands: Amsterdam"
+   },
+   "7": {
+    "api": "RU9",
+    "visible": [
+     true,false,false,false,false,false],
+    "address": "login.p9.tanki.su",
+    "name": "RU9",
+    "color": [
+     [
+      255,0,255],[
+      255,0,255],[
+      255,0,255],[
+      255,0,255],[
+      255,0,255],[
+      255,0,255]],
+    "place": "Russia: Khabarovsk"
+   },
+   "6": {
+    "api": "RU8",
+    "visible": [
+     true,false,false,false,false,false],
+    "address": "login.p8.tanki.su",
+    "name": "RU8",
+    "color": [
+     [
+      0,0,255],[
+      0,0,255],[
+      0,0,255],[
+      0,0,255],[
+      0,0,255],[
+      0,0,255]],
+    "place": "Russia: Krasnoyarsk"
+   },
+   "5": {
+    "api": "RU6",
+    "visible": [
+     true,false,false,false,false,false],
+    "address": "login.p6.tanki.su",
+    "name": "RU6",
+    "color": [
+     [
+      0,191,255],[
+      0,191,255],[
+      0,191,255],[
+      0,191,255],[
+      0,191,255],[
+      0,191,255]],
+    "place": "Russia: Moscow"
+   },
+   "4": {
+    "api": "RU5",
+    "visible": [
+     true,false,false,false,false,true],
+    "address": "login.p5.tanki.su",
+    "name": "RU5",
+    "color": [
+     [
+      0,108,108],[
+      0,108,108],[
+      0,108,108],[
+      0,108,108],[
+      0,108,108],[
+      0,108,108]],
+    "place": "Russia: Moscow"
+   },
+   "3": {
+    "api": "RU4",
+    "visible": [
+     true,false,false,false,true,false],
+    "address": "login.p4.tanki.su",
+    "name": "RU4",
+    "color": [
+     [
+      0,128,0],[
+      0,128,0],[
+      0,128,0],[
+      0,128,0],[
+      0,128,0],[
+      0,128,0]],
+    "place": "Russia: Yekaterinburg"
+   },
+   "2": {
+    "api": "RU3",
+    "visible": [
+     true,false,false,true,false,false],
+    "address": "login.p3.tanki.su",
+    "name": "RU3",
+    "color": [
+     [
+      50,205,50],[
+      50,205,50],[
+      50,205,50],[
+      50,205,50],[
+      50,205,50],[
+      50,205,50]],
+    "place": "Russia: Moscow"
+   },
+   "1": {
+    "api": "RU2",
+    "visible": [
+     true,false,true,false,false,false],
+    "address": "login.p2.tanki.su",
+    "name": "RU2",
+    "color": [
+     [
+      235,145,0],[
+      235,145,0],[
+      235,145,0],[
+      235,145,0],[
+      235,145,0],[
+      235,145,0]],
+    "place": "Russia: Moscow"
+   },
+   "0": {
+    "api": "RU1",
+    "visible": [
+     true,true,false,false,false,false],
+    "address": "login.p1.tanki.su",
+    "name": "RU1",
+    "color": [
+     [
+      255,0,0],[
+      255,0,0],[
+      255,0,0],[
+      255,0,0],[
+      255,0,0],[
+      255,0,0]],
+    "place": "Russia: Moscow"
+   },
+   "21": {
+    "api": "",
+    "visible": [
+     false,false,false,false,false,false],
+    "address": "login-ct-p2.worldoftanks.net",
+    "name": "WOT CT2",
+    "color": [
+     [
+      165,42,42],[
+      165,42,42],[
+      165,42,42],[
+      165,42,42],[
+      165,42,42],[
+      165,42,42]],
+    "place": "Germany: Frankfurt"
+   },
+   "20": {
+    "api": "",
+    "visible": [
+     false,false,false,false,false,false],
+    "address": "login-ct-p1.worldoftanks.net",
+    "name": "WOT CT1",
+    "color": [
+     [
+      0,108,108],[
+      0,108,108],[
+      0,108,108],[
+      0,108,108],[
+      0,108,108],[
+      0,108,108]],
+    "place": "Germany: Frankfurt"
+   },
+   "19": {
+    "api": "",
+    "visible": [
+     false,false,false,false,false,false],
+    "address": "login1-wotrpt.lesta.ru",
+    "name": "LESTA PT1",
+    "color": [
+     [
+      138,43,226],[
+      138,43,226],[
+      138,43,226],[
+      138,43,226],[
+      138,43,226],[
+      138,43,226]],
+    "place": "Russia: Saint-Petersburg"
+   },
+   "18": {
+    "api": "",
+    "visible": [
+     false,false,false,false,false,false],
+    "address": "stat.modxvm.com",
+    "name": "XVM",
+    "color": [
+     [
+      0,0,0],[
+      0,0,0],[
+      0,0,0],[
+      0,0,0],[
+      0,0,0],[
+      0,0,0]],
+    "place": "Germany: Falkenstein"
+   },
+   "17": {
+    "api": "",
+    "visible": [
+     false,false,false,false,false,false],
+    "address": "login.wotcnq2.wotgame.cn",
+    "name": "CH2",
+    "color": [
+     [
+      255,140,0],[
+      255,140,0],[
+      255,140,0],[
+      255,140,0],[
+      255,140,0],[
+      255,140,0]],
+    "place": "China: Shanghai"
+   },
+   "16": {
+    "api": "",
+    "visible": [
+     false,false,false,false,false,false],
+    "address": "login.wotcnq1.wotgame.cn",
+    "name": "CH1",
+    "color": [
+     [
+      255,0,0],[
+      255,0,0],[
+      255,0,0],[
+      255,0,0],[
+      255,0,0],[
+      255,0,0]],
+    "place": "China: Shanghai"
+   },
+   "15": {
+    "api": "ASIA",
+    "visible": [
+     false,false,false,false,false,false],
+    "address": "wotasia1.login.wargaming.net",
+    "name": "ASIA",
+    "color": [
+     [
+      0,128,0],[
+      0,128,0],[
+      0,128,0],[
+      0,128,0],[
+      0,128,0],[
+      0,128,0]],
+    "place": "Singapore: Singapore"
+   },
+   "14": {
+    "api": "LATAM",
+    "visible": [
+     false,false,false,false,false,false],
+    "address": "wotna4.login.wargaming.net",
+    "name": "LATAM",
+    "color": [
+     [
+      50,205,50],[
+      50,205,50],[
+      50,205,50],[
+      50,205,50],[
+      50,205,50],[
+      50,205,50]],
+    "place": "Brazil: Sao Paulo"
+   },
+   "13": {
+    "api": "USC",
+    "visible": [
+     false,false,false,false,false,false],
+    "address": "wotna3.login.wargaming.net",
+    "name": "USC",
+    "color": [
+     [
+      220,20,60],[
+      220,20,60],[
+      220,20,60],[
+      220,20,60],[
+      220,20,60],[
+      220,20,60]],
+    "place": "USA: Chicago"
+   },
+   "12": {
+    "api": "EU5",
+    "visible": [
+     false,false,false,false,false,false],
+    "address": "login.p5.worldoftanks.eu",
+    "name": "EU5",
+    "color": [
+     [
+      139,0,139],[
+      139,0,139],[
+      139,0,139],[
+      139,0,139],[
+      139,0,139],[
+      139,0,139]],
+    "place": "Germany: Frankfurt"
+   },
+   "11": {
+    "api": "EU4",
+    "visible": [
+     false,false,false,false,false,false],
+    "address": "login.p4.worldoftanks.eu",
+    "name": "EU4",
+    "color": [
+     [
+      3,154,181],[
+      3,154,181],[
+      3,154,181],[
+      3,154,181],[
+      3,154,181],[
+      3,154,181]],
+    "place": "Kazakhstan: Almaty"
+   },
+   "10": {
+    "api": "EU3",
+    "visible": [
+     false,false,false,false,false,false],
+    "address": "login.p3.worldoftanks.eu",
+    "name": "EU3",
+    "color": [
+     [
+      0,128,0],[
+      0,128,0],[
+      0,128,0],[
+      0,128,0],[
+      0,128,0],[
+      0,128,0]],
+    "place": "Luxembourg: Luxembourg"
+   },
+   "count": 22
+  },
+  "date": "31.10.2025"
+ },
+ "system": {
+  "settingsfile": {
+   "version": "1.7",
+   "date": "09.09.2026"
+  },
+  "interface": {
+   "windowwidth": 2576,
+   "windowtop": -8,
+   "windowstatemax": true,
+   "windowheight": 1408,
+   "windowleft": -8,
+   "leftpanelwidth": 143
+  },
+  "options": {
+   "debugmode": 0,
+   "autostart": {
+    "enable": true,
+    "plotters": [
+     true,false,false,false,false,false]
+   },
+   "parameters": {
+    "tracing": {
+     "ttl": 64,
+     "badroutemax": 3,
+     "attemptcount": 3,
+     "timeout": 1500
+    },
+    "ping": {
+     "ttl": 64,
+     "averagesmoothingwindow": 20,
+     "timeout": 1500
+    }
+   },
+   "overallgraph": {
+    "useryscale": {
+     "interval": 150
+    },
+    "errorlistview": {
+     "columnswidth": [
+      53,60,90,50,450],
+     "height": 75
+    },
+    "userxscale": {
+     "interval": 30,
+     "abbr": 0
+    },
+    "legendcolor": 16777215,
+    "showlegend": true,
+    "backgroundcolor": [
+     13172735,16777215],
+    "metriclistview": {
+     "sortfield": 2,
+     "width": 180,
+     "columnswidth": [
+      40,40,40,40,40]
+    }
+   },
+   "graph5": {
+    "useryscale": {
+     "interval": 150
+    },
+    "tracerlistview": {
+     "getdns": true,
+     "enable": true,
+     "columnswidth": [
+      50,90,150,90,450]
+    },
+    "userxscale": {
+     "interval": 30,
+     "abbr": 0
+    },
+    "backgroundcolor": [
+     13172735,16777215],
+    "height": 116
+   },
+   "graph4": {
+    "useryscale": {
+     "interval": 150
+    },
+    "tracerlistview": {
+     "getdns": true,
+     "enable": true,
+     "columnswidth": [
+      50,90,150,90,450]
+    },
+    "userxscale": {
+     "interval": 30,
+     "abbr": 0
+    },
+    "backgroundcolor": [
+     13172735,16777215],
+    "height": 116
+   },
+   "graph3": {
+    "useryscale": {
+     "interval": 150
+    },
+    "tracerlistview": {
+     "getdns": true,
+     "enable": true,
+     "columnswidth": [
+      50,90,150,90,450]
+    },
+    "userxscale": {
+     "interval": 30,
+     "abbr": 0
+    },
+    "backgroundcolor": [
+     13172735,16777215],
+    "height": 116
+   },
+   "graph2": {
+    "useryscale": {
+     "interval": 150
+    },
+    "tracerlistview": {
+     "getdns": true,
+     "enable": true,
+     "columnswidth": [
+      50,90,150,90,450]
+    },
+    "userxscale": {
+     "interval": 30,
+     "abbr": 0
+    },
+    "backgroundcolor": [
+     13172735,16777215],
+    "height": 116
+   },
+   "graph1": {
+    "useryscale": {
+     "interval": 150
+    },
+    "tracerlistview": {
+     "getdns": true,
+     "enable": true,
+     "columnswidth": [
+      50,90,150,90,450]
+    },
+    "userxscale": {
+     "interval": 30,
+     "abbr": 0
+    },
+    "backgroundcolor": [
+     13172735,16777215],
+    "height": 116
+   },
+   "xscales": [
+    1,1,1,1,1,1],
+   "yscales": [
+    true,true,true,true,true,true],
+   "downloadonline": true,
+   "autocheckupdate": true,
+   "logging": {
+    "enable": false,
+    "overallgraph": {
+     "enable": true,
+     "filename": "RDpcXExvZ1xPdmVyYWxsR3JhcGguY3N2"
+    },
+    "graph5": {
+     "enable": true,
+     "filename": "RDpcXExvZ1xHcmFwaDUuY3N2"
+    },
+    "graph4": {
+     "enable": true,
+     "filename": "RDpcXExvZ1xHcmFwaDQuY3N2"
+    },
+    "graph3": {
+     "enable": true,
+     "filename": "RDpcXExvZ1xHcmFwaDMuY3N2"
+    },
+    "graph2": {
+     "enable": true,
+     "filename": "RDpcXExvZ1xHcmFwaDIuY3N2"
+    },
+    "graph1": {
+     "enable": true,
+     "filename": "RDpcXExvZ1xHcmFwaDEuY3N2"
+    }
+   },
+   "labels": [
+    false,true,true,true,true,true],
+   "font": {
+    "style": {
+     "italic": false,
+     "bold": false,
+     "underline": false
+    },
+    "size": 9,
+    "name": "Segoe UI"
+   },
+   "language": 0,
+   "delays": [
+    500,500,500,500,500,500]
+  }
+ }
+}
