@@ -1,0 +1,103 @@
+QWidget {
+    background-color: #2b2b2b;
+    color: #ffffff;
+    font-family: "Segoe UI";
+    font-size: 9pt;
+}
+QFrame#leftPanel {
+    background-color: #1e1e1e;
+    border-right: 1px solid #3a3a3a;
+}
+QLabel#logoLabel {
+    font-size: 18pt;
+    font-weight: bold;
+    padding: 20px 0;
+    color: #4a9eff;
+}
+QPushButton#menuButton {
+    background-color: transparent;
+    border: none;
+    text-align: left;
+    padding: 10px 20px;
+    font-size: 10pt;
+}
+QPushButton#menuButton:hover {
+    background-color: #3a3a3a;
+}
+QPushButton#menuButton:checked {
+    background-color: #3a3a3a;
+    border-left: 3px solid #4a9eff;
+}
+QFrame#indicatorFrame {
+    background-color: #3a3a3a;
+    border-radius: 8px;
+    padding: 10px;
+}
+QLabel#indicatorTitle {
+    font-size: 9pt;
+    color: #aaaaaa;
+}
+QLabel#indicatorValue {
+    font-size: 16pt;
+    font-weight: bold;
+}
+QPushButton#controlButton {
+    background-color: #4a9eff;
+    border: none;
+    border-radius: 4px;
+    padding: 5px 15px;
+    font-weight: bold;
+}
+QPushButton#controlButton:hover {
+    background-color: #6ab0ff;
+}
+QPushButton#controlButton:disabled {
+    background-color: #555555;
+    color: #888888;
+}
+QFrame#recommendWidget {
+    background-color: #1e3a5f;
+    border-radius: 8px;
+    padding: 10px;
+}
+QLabel#recommendName {
+    font-size: 14pt;
+    font-weight: bold;
+    color: #ffcc00;
+}
+QFrame#serverCard {
+    background-color: #3a3a3a;
+    border-radius: 8px;
+    padding: 10px;
+    min-width: 120px;
+    min-height: 100px;
+}
+QLabel#serverName {
+    font-size: 12pt;
+    font-weight: bold;
+}
+QLabel#serverLocation {
+    font-size: 8pt;
+    color: #aaaaaa;
+}
+QLabel#serverPing {
+    font-size: 10pt;
+}
+QLabel#serverOnline {
+    font-size: 9pt;
+    color: #88ff88;
+}
+QTableWidget {
+    background-color: #2b2b2b;
+    alternate-background-color: #353535;
+    gridline-color: #444444;
+}
+QHeaderView::section {
+    background-color: #1e1e1e;
+    padding: 6px;
+    border: 1px solid #444444;
+    font-weight: bold;
+}
+QLabel#statusLabel {
+    font-size: 11pt;
+}
