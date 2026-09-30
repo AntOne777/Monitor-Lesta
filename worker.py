@@ -8,16 +8,18 @@ Architecture:
 from __future__ import annotations
 
 import concurrent.futures
+import http.client
 import json
 import os
+import re
 import socket
+import ssl
 import subprocess
 import sys
 import threading
 import time
 from typing import Optional
-
-import requests
+from urllib.parse import urlparse
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from core.config import AppSettings, ServerInfo, ONLINE_API_URL
@@ -27,96 +29,157 @@ from core.config import AppSettings, ServerInfo, ONLINE_API_URL
 # Helpers
 # ---------------------------------------------------------------------------
 
+_dns_cache: dict[str, tuple[float, Optional[str]]] = {}
+_DNS_TTL_S = 300.0  # перевыводим DNS каждые 5 минут
+
+
 def _resolve_host(host: str) -> Optional[str]:
-    """Resolve domain to IP; return IP string or None on failure."""
-    try:
-        return socket.gethostbyname(host)
-    except OSError:
-        return None
+    """Resolve domain to IP with short-lived cache; None on failure.
 
-
-def _ping_socket(host: str, timeout_s: float = 1.0) -> Optional[float]:
+    Если хост уже является IP-адресом — возвращаем его как есть
+    (обратная совместимость со старым config.py).
     """
-    Measure round-trip via raw ICMP echo using socket (requires no admin on some OSes).
-    Falls back gracefully. Returns ms or None.
-    """
-    import struct, select, time as _time
-
-    # Build ICMP echo packet
-    ICMP_ECHO_REQUEST = 8
+    now = time.monotonic()
+    cached = _dns_cache.get(host)
+    if cached and (now - cached[0]) < _DNS_TTL_S and cached[1] is not None:
+        return cached[1]
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
-        sock.settimeout(timeout_s)
-    except OSError:
-        # Raw socket not available (no admin) — return None to use TCP fallback
-        return None
+        import ipaddress
+        ipaddress.ip_address(host)
+        ip = host                      # это уже IP — резолвить не нужно
+    except ValueError:
+        try:
+            ip = socket.gethostbyname(host)
+        except OSError:
+            ip = None
+    _dns_cache[host] = (now, ip)
+    return ip
 
+
+# Порты для TCP-fallback в порядке приоритета.
+# ВАЖНО: у некоторых игровых шлюзов (например login.p1.tanki.su) порт 443
+# закрыт/фильтруется — тогда пинг по 443 всегда даёт прочерк, хотя сервер жив.
+# Поэтому пробуем несколько портов и берём первый успешный замер.
+_TCP_PROBE_PORTS = (80, 443, 20012, 20021)
+
+
+def _ping_tcp(host: str, ports=_TCP_PROBE_PORTS, timeout_s: float = 2.0) -> Optional[float]:
+    """Fallback: TCP connect latency (ms). Пробует несколько портов."""
     try:
         ip = _resolve_host(host)
         if ip is None:
             return None
-
-        # Build ICMP packet using network byte order (!)
-        packet_id = threading.get_ident() & 0xFFFF
-        header = struct.pack("!bbHHh", ICMP_ECHO_REQUEST, 0, 0, packet_id, 1)
-        payload = b"abcdefghijklmnop"
-        checksum = _icmp_checksum(header + payload)
-        header = struct.pack("!bbHHh", ICMP_ECHO_REQUEST, 0, checksum, packet_id, 1)
-        packet = header + payload
-
-        t0 = _time.perf_counter()
-        sock.sendto(packet, (ip, 0))
-        ready = select.select([sock], [], [], timeout_s)
-        if ready[0]:
-            _ = sock.recv(1024)
-            return (_time.perf_counter() - t0) * 1000.0
     except OSError:
-        pass
-    finally:
-        sock.close()
+        return None
 
+    for port in ports:
+        try:
+            t0 = time.perf_counter()
+            with socket.create_connection((ip, port), timeout=timeout_s):
+                pass
+            return (time.perf_counter() - t0) * 1000.0
+        except (OSError, socket.timeout):
+            continue
     return None
 
 
-def _icmp_checksum(data: bytes) -> int:
-    s = 0
-    for i in range(0, len(data) - 1, 2):
-        s += (data[i] << 8) + data[i + 1]
-    if len(data) % 2:
-        s += data[-1] << 8
-    s = (s >> 16) + (s & 0xFFFF)
-    s += s >> 16
-    return ~s & 0xFFFF
+# Паттерны собираются из байтов в ЯВНО указанных кодировках — это надёжнее,
+# чем хардкод байтовых литералов (cp866 и cp1251 дают разные байты для кириллицы).
+def _alts(word: str):
+    out = []
+    for enc in ("cp866", "cp1251", "utf-8"):
+        out.append(word.encode(enc))
+        out.append(word.upper().encode(enc))
+    return b"|".join(re.escape(a) for a in out)
+
+_TIME_WORD = _alts("время")
+# ASCII-вариант «time=Nms» ловится всегда; русский «время=N...» не привязывается
+# к байтам суффикса «мс» (они зависят от кодировки) — берём только число.
+_NUM_PAT = re.compile(
+    rb"(?:time\s*[=<]\s*(\d+(?:[.,]\d+)?)\s*m?s" +
+    rb"|" + rb"(?:" + _TIME_WORD + rb")\s*[=<]\s*(\d+(?:[.,]\d+)?)" + rb")",
+    re.IGNORECASE)
+_LT1_PAT = re.compile(
+    rb"(?:time\s*<\s*1\s*m?s|(?:" + _TIME_WORD + rb")\s*<)", re.IGNORECASE)
 
 
-def _ping_tcp(host: str, port: int = 443, timeout_s: float = 2.0) -> Optional[float]:
-    """Fallback: measure TCP connect latency (ms)."""
+def _ping_system_command(host: str, timeout_s: float = 2.0) -> Optional[float]:
+    """
+    RTT через системный ping.exe — тот же метод, который гарантированно
+    работает у пользователя в cmd (PingSucceeded=True, RTT=10 ms).
+
+    Исправления по итогам внешнего код-ревью:
+      * НЕ используем text=True: он декодирует вывод в cp1251, тогда как
+        ping.exe печатает в OEM-кодировке (cp866/cp1251/oem) — кириллица
+        превращалась в крякозябры и регулярка «время=Nмс» не срабатывала.
+        Читаем БАЙТЫ и ищем паттерны сразу в нескольких кодировках.
+      * Убран читерский «return 1.0»: если reply есть, но число не
+        распознано — честно возвращаем None и идём в TCP-фолбэк.
+    """
+    target = _resolve_host(host) or host
     try:
-        ip = _resolve_host(host)
-        if ip is None:
-            return None
-        t0 = time.perf_counter()
-        with socket.create_connection((ip, port), timeout=timeout_s):
-            pass
-        return (time.perf_counter() - t0) * 1000.0
-    except (OSError, socket.timeout):
+        result = subprocess.run(
+            ["ping", "-n", "1", "-w", str(int(timeout_s * 1000)), target],
+            capture_output=True,
+            timeout=timeout_s + 1.5,
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+        )
+        out = result.stdout or b""
+
+        # Собираем варианты декодирования → utf-8 байты (для RU-локали:
+        # cp866/cp1251 дают корректное «время=10мс», затем матчимся).
+        blobs = [out]
+        for enc in ("cp866", "cp1251", "utf-8"):
+            try:
+                blobs.append(out.decode(enc, errors="ignore").encode("utf-8"))
+            except Exception:
+                continue
+        blob = b"\n".join(blobs)
+
+        # Собираем ВСЕ ответы (ping -n 1 выдаёт одну строку «время=Nмс»,
+        # но при увеличении -n берём медиану для устойчивости к выбросам).
+        vals = []
+        for m in _NUM_PAT.finditer(blob):
+            g = next(x for x in m.groups() if x)
+            try:
+                v = float(g.replace(b",", b"."))
+            except ValueError:
+                continue
+            if 0 < v < 10000:
+                vals.append(v)
+
+        # "время<..." / "time<1ms" — очень быстрый ответ (<1 мс)
+        if not vals and _LT1_PAT.search(blob):
+            return 0.5
+
+        if vals:
+            vals.sort()
+            return vals[len(vals) // 2]   # медиана
+
+        # Reply мог прийти без распознанного числа — НЕ выдумываем значение:
+        # возвращаем None, решение за TCP-фолбэком.
+        return None
+
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
         return None
 
 
 def measure_ping(server: ServerInfo, timeout_s: float = 2.0) -> Optional[float]:
     """
-    Try ICMP ping first; fall back to TCP connect if ICMP fails.
-    Resolves domain hosts before pinging.
+    Порядок замеров:
+      1) Системный ping.exe (ICMP) — надёжный, тот же что в cmd.
+      2) Fallback: TCP connect latency (несколько портов).
     """
     host = server.host
 
-    # Try socket ICMP
-    result = _ping_socket(host, timeout_s)
+    # 1) Системный ping.exe
+    result = _ping_system_command(host, timeout_s)
     if result is not None:
         return result
 
-    # Fallback: TCP connect
-    return _ping_tcp(host, server.port, timeout_s)
+    # 2) Fallback: TCP connect (сначала настроенный порт сервера, затем типовые)
+    ports = tuple([server.port] + [p for p in _TCP_PROBE_PORTS if p != server.port])
+    return _ping_tcp(host, ports, timeout_s)
 
 
 # ---------------------------------------------------------------------------
@@ -142,15 +205,15 @@ class PingManagerWorker(QThread):
     def run(self) -> None:
         interval_s = self.app_settings.ping_interval_ms / 1000.0
         self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=len(self.servers))
-        
+
         while not self._stop_event.is_set():
             t_start = time.perf_counter()
-            
+
             futures = {
                 self._executor.submit(measure_ping, srv, interval_s * 0.8): srv
                 for srv in self.servers
             }
-            
+
             for future in concurrent.futures.as_completed(futures):
                 if self._stop_event.is_set():
                     break
@@ -193,8 +256,7 @@ class OnlineWorker(QThread):
         self.app_settings = app_settings
         self._stop_event = threading.Event()
         self._force_event = threading.Event()
-        self._session = requests.Session()
-        self._session.headers.update({"User-Agent": "MT-Monitor/1.0"})
+        self._conn = None  # keep-alive http.client.HTTPSConnection
 
     def run(self) -> None:
         while not self._stop_event.is_set():
@@ -208,33 +270,69 @@ class OnlineWorker(QThread):
                 self._stop_event.wait(chunk)
                 slept += chunk
 
+    def _close_conn(self) -> None:
+        if self._conn is not None:
+            try:
+                self._conn.close()
+            except Exception:
+                pass
+            self._conn = None
+
     def _fetch(self) -> None:
+        """HTTPS GET без requests/urllib3 — экономия ~1.5 МБ в собранном .exe."""
+        url = urlparse(ONLINE_API_URL)
+        host = url.netloc
+        path = url.path or "/"
+        if url.query:
+            path += "?" + url.query
+        headers = {"User-Agent": "MT-Monitor/1.0", "Accept": "application/json"}
         try:
-            with self._session.get(ONLINE_API_URL, timeout=10, stream=True, verify=True) as resp:
-                resp.raise_for_status()
-                
-                # Protect against OOM (max 2 MB)
-                content_length = resp.headers.get('Content-Length')
-                if content_length and int(content_length) > 2 * 1024 * 1024:
-                    raise ValueError("Payload too large (Content-Length)")
-                
-                raw_data = b""
-                for chunk in resp.iter_content(chunk_size=8192):
-                    if self._stop_event.is_set():
-                        return
-                    raw_data += chunk
-                    if len(raw_data) > 2 * 1024 * 1024:
-                        raise ValueError("Payload too large (Chunking)")
-                        
-                data = json.loads(raw_data)
-                self._parse(data)
-        except requests.ConnectionError:
-            self.fetch_error.emit("Кажется, пропал интернет")
-        except requests.Timeout:
-            self.fetch_error.emit("Сервис API не отвечает")
-        except requests.HTTPError as exc:
-            self.fetch_error.emit(f"Ошибка API: {exc}")
+            try:
+                if self._conn is None:
+                    self._conn = http.client.HTTPSConnection(
+                        host, timeout=10, context=ssl.create_default_context())
+                self._conn.request("GET", path, headers=headers)
+                resp = self._conn.getresponse()
+            except (http.client.HTTPException, OSError):
+                # соединение протухло / сети нет — пересоздаём один раз
+                self._close_conn()
+                self._conn = http.client.HTTPSConnection(
+                    host, timeout=10, context=ssl.create_default_context())
+                self._conn.request("GET", path, headers=headers)
+                resp = self._conn.getresponse()
+
+            if resp.status >= 400:
+                raise RuntimeError(f"HTTP {resp.status}")
+
+            # Защита от OOM (max 2 MB)
+            content_length = resp.getheader("Content-Length")
+            if content_length and int(content_length) > 2 * 1024 * 1024:
+                raise ValueError("Payload too large (Content-Length)")
+
+            raw_data = b""
+            while True:
+                if self._stop_event.is_set():
+                    return
+                chunk = resp.read(8192)
+                if not chunk:
+                    break
+                raw_data += chunk
+                if len(raw_data) > 2 * 1024 * 1024:
+                    raise ValueError("Payload too large (Chunking)")
+
+            self._close_conn()
+            data = json.loads(raw_data)
+            self._parse(data)
+        except (http.client.HTTPException, OSError) as exc:
+            self._close_conn()
+            if self._stop_event.is_set():
+                return
+            if isinstance(exc, socket.timeout) or "timed out" in str(exc).lower():
+                self.fetch_error.emit("Сервис API не отвечает")
+            else:
+                self.fetch_error.emit("Кажется, пропал интернет")
         except Exception as exc:  # noqa: BLE001
+            self._close_conn()
             self.fetch_error.emit(f"Не удалось обновить онлайн: {exc}")
 
     def _parse(self, data: dict | list) -> None:
@@ -281,7 +379,7 @@ class OnlineWorker(QThread):
 
     def stop(self) -> None:
         self._stop_event.set()
-        self._session.close()
+        self._close_conn()
 
     def fetch_now(self) -> None:
         """Request immediate fetch on next worker cycle without blocking caller thread."""

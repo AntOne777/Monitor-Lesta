@@ -2,6 +2,12 @@ PyQt6>=6.6.0
 PyQt6-Qt6>=6.6.0
 PyQt6-sip>=13.6.0
 PyQt6-Fluent-Widgets>=1.6.0
-requests>=2.31.0
-ping3>=4.0.4
+# requests больше не нужен: HTTPS-запросы идут через stdlib http.client (worker.py)
+# ping3 не используется: ICMP-ping реализован на чистом socket в worker.py
+# Упаковщик (рекомендуется): PyInstaller + UPX -> один .exe < 35 МБ, старт 1-3 с
+# (сборка: build_fast.bat / pyinstaller build_fast.spec)
 pyinstaller>=6.3.0
+# Опционально (эксперимент, размер 60-120 МБ): сборка через build_nuitka.bat
+# nuitka>=2.5
+# ordered-set
+# zstandard
