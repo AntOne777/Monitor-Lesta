@@ -89,18 +89,31 @@ def _icmp_checksum(data: bytes) -> int:
     return ~s & 0xFFFF
 
 
-def _ping_tcp(host: str, port: int = 443, timeout_s: float = 2.0) -> Optional[float]:
-    """Fallback: measure TCP connect latency (ms)."""
+# Порты для TCP-fallback в порядке приоритета.
+# ВАЖНО: у некоторых игровых шлюзов (например login.p1.tanki.su) порт 443
+# закрыт/фильтруется — тогда пинг по 443 всегда даёт прочерк, хотя сервер жив.
+# Поэтому пробуем несколько портов и берём первый успешный замер.
+_TCP_PROBE_PORTS = (80, 443, 20012, 20021)
+
+
+def _ping_tcp(host: str, ports=_TCP_PROBE_PORTS, timeout_s: float = 2.0) -> Optional[float]:
+    """Fallback: TCP connect latency (ms). Пробует несколько портов."""
     try:
         ip = _resolve_host(host)
         if ip is None:
             return None
-        t0 = time.perf_counter()
-        with socket.create_connection((ip, port), timeout=timeout_s):
-            pass
-        return (time.perf_counter() - t0) * 1000.0
-    except (OSError, socket.timeout):
+    except OSError:
         return None
+
+    for port in ports:
+        try:
+            t0 = time.perf_counter()
+            with socket.create_connection((ip, port), timeout=timeout_s):
+                pass
+            return (time.perf_counter() - t0) * 1000.0
+        except (OSError, socket.timeout):
+            continue
+    return None
 
 
 def measure_ping(server: ServerInfo, timeout_s: float = 2.0) -> Optional[float]:
@@ -115,8 +128,9 @@ def measure_ping(server: ServerInfo, timeout_s: float = 2.0) -> Optional[float]:
     if result is not None:
         return result
 
-    # Fallback: TCP connect
-    return _ping_tcp(host, server.port, timeout_s)
+    # Fallback: TCP connect (сначала настроенный порт сервера, затем типовые)
+    ports = tuple([server.port] + [p for p in _TCP_PROBE_PORTS if p != server.port])
+    return _ping_tcp(host, ports, timeout_s)
 
 
 # ---------------------------------------------------------------------------
