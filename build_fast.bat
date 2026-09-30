@@ -24,7 +24,8 @@ echo [2/3] Building dist\MT_Monitor.exe  (onefile, UPX best)...
 pyinstaller build_fast.spec --clean --noconfirm
 if errorlevel 1 (
     echo [ERROR] Build failed. See messages above.
-    pause & exit /b 1
+    pause
+    exit /b 1
 )
 
 echo [3/3] Done!
