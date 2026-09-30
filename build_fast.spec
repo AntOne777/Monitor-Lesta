@@ -36,6 +36,8 @@ a = Analysis(
     ],
     hiddenimports=hiddenimports + [
         "PyQt6.QtSvg",       # нужен qfluentwidgets (отрисовка иконок)
+        "PyQt6.QtXml",       # qfluentwidgets/common/icon.py импортирует QtXml на старте
+                             # (НЕ добавлять в excludes — иначе ModuleNotFoundError)
         "core.config",
         "core.analytics",
         "worker",
@@ -58,7 +60,9 @@ a = Analysis(
         "PyQt6.QtNetwork",   # HTTP идёт через stdlib http.client — Qt6Network.dll не нужен
         "PyQt6.QtPdf", "PyQt6.QtPdfWidgets",
         "PyQt6.QtDesigner", "PyQt6.QtUiTools",
-        "PyQt6.QtXml", "PyQt6.QtDBus",
+        # ВАЖНО: PyQt6.QtXml НЕ исключаем — его требует qfluentwidgets.common.icon
+        # (цветовой диалог). Исключение = ModuleNotFoundError при запуске .exe.
+        "PyQt6.QtDBus",
         # --- Тяжёлые Python-библиотеки, которых нет в коде ---
         "numpy", "scipy", "pandas", "matplotlib", "PIL",
         "tkinter", "unittest", "pydoc", "setuptools", "pip",
@@ -105,7 +109,11 @@ a.binaries = [x for x in a.binaries if Path(x[0]).name not in excluded_binaries]
 # Все .qm локализации Qt (~6.5 МБ) — программе нужен только ru/en из qfluentwidgets
 a.datas = [x for x in a.datas if not x[0].endswith(".qm")]
 
-# Отсекаем лишние подмодули qfluentwidgets (gallery/components демо и т.п.)
+# Отсекаем лишние подмодули qfluentwidgets (демо/галерея).
+# ВАЖНО: НЕ отсекаем qfluentwidgets.multimedia — в 1.11.x он импортируется
+# из components/dialog_box/message_dialog.py на старте пакета; исключение
+# даст ModuleNotFoundError при запуске .exe. Сам PyQt6.QtMultimedia остаётся
+# в excludes — multimedia-модули библиотеки защищены try/except ImportError.
 hiddenimports = [h for h in hiddenimports if ".gallery" not in h and ".demo" not in h]
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
