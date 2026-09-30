@@ -11,8 +11,10 @@ import concurrent.futures
 import http.client
 import json
 import os
+import re
 import socket
 import ssl
+import subprocess
 import sys
 import threading
 import time
@@ -33,60 +35,6 @@ def _resolve_host(host: str) -> Optional[str]:
         return socket.gethostbyname(host)
     except OSError:
         return None
-
-
-def _ping_socket(host: str, timeout_s: float = 1.0) -> Optional[float]:
-    """
-    Measure round-trip via raw ICMP echo using socket (requires no admin on some OSes).
-    Falls back gracefully. Returns ms or None.
-    """
-    import struct, select, time as _time
-
-    # Build ICMP echo packet
-    ICMP_ECHO_REQUEST = 8
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
-        sock.settimeout(timeout_s)
-    except OSError:
-        # Raw socket not available (no admin) — return None to use TCP fallback
-        return None
-
-    try:
-        ip = _resolve_host(host)
-        if ip is None:
-            return None
-
-        # Build ICMP packet using network byte order (!)
-        packet_id = threading.get_ident() & 0xFFFF
-        header = struct.pack("!bbHHh", ICMP_ECHO_REQUEST, 0, 0, packet_id, 1)
-        payload = b"abcdefghijklmnop"
-        checksum = _icmp_checksum(header + payload)
-        header = struct.pack("!bbHHh", ICMP_ECHO_REQUEST, 0, checksum, packet_id, 1)
-        packet = header + payload
-
-        t0 = _time.perf_counter()
-        sock.sendto(packet, (ip, 0))
-        ready = select.select([sock], [], [], timeout_s)
-        if ready[0]:
-            _ = sock.recv(1024)
-            return (_time.perf_counter() - t0) * 1000.0
-    except OSError:
-        pass
-    finally:
-        sock.close()
-
-    return None
-
-
-def _icmp_checksum(data: bytes) -> int:
-    s = 0
-    for i in range(0, len(data) - 1, 2):
-        s += (data[i] << 8) + data[i + 1]
-    if len(data) % 2:
-        s += data[-1] << 8
-    s = (s >> 16) + (s & 0xFFFF)
-    s += s >> 16
-    return ~s & 0xFFFF
 
 
 # Порты для TCP-fallback в порядке приоритета.
@@ -116,19 +64,91 @@ def _ping_tcp(host: str, ports=_TCP_PROBE_PORTS, timeout_s: float = 2.0) -> Opti
     return None
 
 
+# Паттерны собираются из байтов в ЯВНО указанных кодировках — это надёжнее,
+# чем хардкод байтовых литералов (cp866 и cp1251 дают разные байты для кириллицы).
+def _alts(word: str):
+    out = []
+    for enc in ("cp866", "cp1251", "utf-8"):
+        out.append(word.encode(enc))
+        out.append(word.upper().encode(enc))
+    return b"|".join(re.escape(a) for a in out)
+
+_TIME_WORD = _alts("время")
+# ASCII-вариант «time=Nms» ловится всегда; русский «время=N...» не привязывается
+# к байтам суффикса «мс» (они зависят от кодировки) — берём только число.
+_NUM_PAT = re.compile(
+    rb"(?:time\s*[=<]\s*(\d+(?:[.,]\d+)?)\s*m?s" +
+    rb"|" + rb"(?:" + _TIME_WORD + rb")\s*[=<]\s*(\d+(?:[.,]\d+)?)" + rb")",
+    re.IGNORECASE)
+_LT1_PAT = re.compile(
+    rb"(?:time\s*<\s*1\s*m?s|(?:" + _TIME_WORD + rb")\s*<)", re.IGNORECASE)
+
+
+def _ping_system_command(host: str, timeout_s: float = 2.0) -> Optional[float]:
+    """
+    RTT через системный ping.exe — тот же метод, который гарантированно
+    работает у пользователя в cmd (PingSucceeded=True, RTT=10 ms).
+
+    Исправления по итогам внешнего код-ревью:
+      * НЕ используем text=True: он декодирует вывод в cp1251, тогда как
+        ping.exe печатает в OEM-кодировке (cp866/cp1251/oem) — кириллица
+        превращалась в крякозябры и регулярка «время=Nмс» не срабатывала.
+        Читаем БАЙТЫ и ищем паттерны сразу в нескольких кодировках.
+      * Убран читерский «return 1.0»: если reply есть, но число не
+        распознано — честно возвращаем None и идём в TCP-фолбэк.
+    """
+    try:
+        result = subprocess.run(
+            ["ping", "-n", "1", "-w", str(int(timeout_s * 1000)), host],
+            capture_output=True,
+            timeout=timeout_s + 1.5,
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+        )
+        out = result.stdout or b""
+
+        # Собираем варианты декодирования → utf-8 байты (для RU-локали:
+        # cp866/cp1251 дают корректное «время=10мс», затем матчимся).
+        blobs = [out]
+        for enc in ("cp866", "cp1251", "utf-8"):
+            try:
+                blobs.append(out.decode(enc, errors="ignore").encode("utf-8"))
+            except Exception:
+                continue
+        blob = b"\n".join(blobs)
+
+        # "время<..." / "time<1ms" — очень быстрый ответ (<1 мс)
+        if _LT1_PAT.search(blob):
+            return 0.5
+
+        m = _NUM_PAT.search(blob)
+        if m:
+            g = next(x for x in m.groups() if x)
+            val = float(g.replace(b",", b"."))
+            if 0 < val < 10000:
+                return val
+
+        # Reply мог прийти без распознанного числа — НЕ выдумываем значение:
+        # возвращаем None, решение за TCP-фолбэком.
+        return None
+
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return None
+
+
 def measure_ping(server: ServerInfo, timeout_s: float = 2.0) -> Optional[float]:
     """
-    Try ICMP ping first; fall back to TCP connect if ICMP fails.
-    Resolves domain hosts before pinging.
+    Порядок замеров:
+      1) Системный ping.exe (ICMP) — надёжный, тот же что в cmd.
+      2) Fallback: TCP connect latency (несколько портов).
     """
     host = server.host
 
-    # Try socket ICMP
-    result = _ping_socket(host, timeout_s)
+    # 1) Системный ping.exe
+    result = _ping_system_command(host, timeout_s)
     if result is not None:
         return result
 
-    # Fallback: TCP connect (сначала настроенный порт сервера, затем типовые)
+    # 2) Fallback: TCP connect (сначала настроенный порт сервера, затем типовые)
     ports = tuple([server.port] + [p for p in _TCP_PROBE_PORTS if p != server.port])
     return _ping_tcp(host, ports, timeout_s)
 
