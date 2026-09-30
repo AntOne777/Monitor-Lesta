@@ -11,8 +11,8 @@ where python >nul 2>nul || (echo [ERROR] Python not found in PATH & pause & exit
 
 echo [1/3] Checking dependencies...
 python -c "import PyInstaller" 2>nul || pip install --upgrade pyinstaller
-python -c "import PyQt6, qfluentwidgets, requests" 2>nul ^
-  || pip install PyQt6 PyQt6-Qt6 PyQt6-Fluent-Widgets requests
+python -c "import PyQt6, qfluentwidgets" 2>nul ^
+  || pip install PyQt6 PyQt6-Qt6 PyQt6-Fluent-Widgets
 
 if not exist upx.exe (
     echo [WARN] upx.exe not found next to this script.
