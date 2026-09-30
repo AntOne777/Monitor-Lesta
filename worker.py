@@ -29,12 +29,31 @@ from core.config import AppSettings, ServerInfo, ONLINE_API_URL
 # Helpers
 # ---------------------------------------------------------------------------
 
+_dns_cache: dict[str, tuple[float, Optional[str]]] = {}
+_DNS_TTL_S = 300.0  # перевыводим DNS каждые 5 минут
+
+
 def _resolve_host(host: str) -> Optional[str]:
-    """Resolve domain to IP; return IP string or None on failure."""
+    """Resolve domain to IP with short-lived cache; None on failure.
+
+    Если хост уже является IP-адресом — возвращаем его как есть
+    (обратная совместимость со старым config.py).
+    """
+    now = time.monotonic()
+    cached = _dns_cache.get(host)
+    if cached and (now - cached[0]) < _DNS_TTL_S and cached[1] is not None:
+        return cached[1]
     try:
-        return socket.gethostbyname(host)
-    except OSError:
-        return None
+        import ipaddress
+        ipaddress.ip_address(host)
+        ip = host                      # это уже IP — резолвить не нужно
+    except ValueError:
+        try:
+            ip = socket.gethostbyname(host)
+        except OSError:
+            ip = None
+    _dns_cache[host] = (now, ip)
+    return ip
 
 
 # Порты для TCP-fallback в порядке приоритета.
@@ -97,9 +116,10 @@ def _ping_system_command(host: str, timeout_s: float = 2.0) -> Optional[float]:
       * Убран читерский «return 1.0»: если reply есть, но число не
         распознано — честно возвращаем None и идём в TCP-фолбэк.
     """
+    target = _resolve_host(host) or host
     try:
         result = subprocess.run(
-            ["ping", "-n", "1", "-w", str(int(timeout_s * 1000)), host],
+            ["ping", "-n", "1", "-w", str(int(timeout_s * 1000)), target],
             capture_output=True,
             timeout=timeout_s + 1.5,
             creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
