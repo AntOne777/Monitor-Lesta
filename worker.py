@@ -8,16 +8,16 @@ Architecture:
 from __future__ import annotations
 
 import concurrent.futures
+import http.client
 import json
 import os
 import socket
-import subprocess
+import ssl
 import sys
 import threading
 import time
 from typing import Optional
-
-import requests
+from urllib.parse import urlparse
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from core.config import AppSettings, ServerInfo, ONLINE_API_URL
@@ -193,8 +193,7 @@ class OnlineWorker(QThread):
         self.app_settings = app_settings
         self._stop_event = threading.Event()
         self._force_event = threading.Event()
-        self._session = requests.Session()
-        self._session.headers.update({"User-Agent": "MT-Monitor/1.0"})
+        self._conn = None  # keep-alive http.client.HTTPSConnection
 
     def run(self) -> None:
         while not self._stop_event.is_set():
@@ -208,33 +207,69 @@ class OnlineWorker(QThread):
                 self._stop_event.wait(chunk)
                 slept += chunk
 
+    def _close_conn(self) -> None:
+        if self._conn is not None:
+            try:
+                self._conn.close()
+            except Exception:
+                pass
+            self._conn = None
+
     def _fetch(self) -> None:
+        """HTTPS GET без requests/urllib3 — экономия ~1.5 МБ в собранном .exe."""
+        url = urlparse(ONLINE_API_URL)
+        host = url.netloc
+        path = url.path or "/"
+        if url.query:
+            path += "?" + url.query
+        headers = {"User-Agent": "MT-Monitor/1.0", "Accept": "application/json"}
         try:
-            with self._session.get(ONLINE_API_URL, timeout=10, stream=True, verify=True) as resp:
-                resp.raise_for_status()
-                
-                # Protect against OOM (max 2 MB)
-                content_length = resp.headers.get('Content-Length')
-                if content_length and int(content_length) > 2 * 1024 * 1024:
-                    raise ValueError("Payload too large (Content-Length)")
-                
-                raw_data = b""
-                for chunk in resp.iter_content(chunk_size=8192):
-                    if self._stop_event.is_set():
-                        return
-                    raw_data += chunk
-                    if len(raw_data) > 2 * 1024 * 1024:
-                        raise ValueError("Payload too large (Chunking)")
-                        
-                data = json.loads(raw_data)
-                self._parse(data)
-        except requests.ConnectionError:
-            self.fetch_error.emit("Кажется, пропал интернет")
-        except requests.Timeout:
-            self.fetch_error.emit("Сервис API не отвечает")
-        except requests.HTTPError as exc:
-            self.fetch_error.emit(f"Ошибка API: {exc}")
+            try:
+                if self._conn is None:
+                    self._conn = http.client.HTTPSConnection(
+                        host, timeout=10, context=ssl.create_default_context())
+                self._conn.request("GET", path, headers=headers)
+                resp = self._conn.getresponse()
+            except (http.client.HTTPException, OSError):
+                # соединение протухло / сети нет — пересоздаём один раз
+                self._close_conn()
+                self._conn = http.client.HTTPSConnection(
+                    host, timeout=10, context=ssl.create_default_context())
+                self._conn.request("GET", path, headers=headers)
+                resp = self._conn.getresponse()
+
+            if resp.status >= 400:
+                raise RuntimeError(f"HTTP {resp.status}")
+
+            # Защита от OOM (max 2 MB)
+            content_length = resp.getheader("Content-Length")
+            if content_length and int(content_length) > 2 * 1024 * 1024:
+                raise ValueError("Payload too large (Content-Length)")
+
+            raw_data = b""
+            while True:
+                if self._stop_event.is_set():
+                    return
+                chunk = resp.read(8192)
+                if not chunk:
+                    break
+                raw_data += chunk
+                if len(raw_data) > 2 * 1024 * 1024:
+                    raise ValueError("Payload too large (Chunking)")
+
+            self._close_conn()
+            data = json.loads(raw_data)
+            self._parse(data)
+        except (http.client.HTTPException, OSError) as exc:
+            self._close_conn()
+            if self._stop_event.is_set():
+                return
+            if isinstance(exc, socket.timeout) or "timed out" in str(exc).lower():
+                self.fetch_error.emit("Сервис API не отвечает")
+            else:
+                self.fetch_error.emit("Кажется, пропал интернет")
         except Exception as exc:  # noqa: BLE001
+            self._close_conn()
             self.fetch_error.emit(f"Не удалось обновить онлайн: {exc}")
 
     def _parse(self, data: dict | list) -> None:
@@ -281,7 +316,7 @@ class OnlineWorker(QThread):
 
     def stop(self) -> None:
         self._stop_event.set()
-        self._session.close()
+        self._close_conn()
 
     def fetch_now(self) -> None:
         """Request immediate fetch on next worker cycle without blocking caller thread."""

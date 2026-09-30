@@ -1,5 +1,18 @@
 from __future__ import annotations
+
+# ---------------------------------------------------------------------------
+# Оптимизация запуска собранного .exe (Nuitka --onefile / PyInstaller onefile).
+#
+# Тяжёлые страницы/метрики/фоновые потоки создаются лениво
+# (QTimer.singleShot) уже ПОСЛЕ show(), поэтому окно появляется практически
+# мгновенно после двойного клика. Эти приёмы полезны независимо от упаковщика.
+# ---------------------------------------------------------------------------
 import sys
+import os
+
+# Не пишем .pyc во временную папку при каждом запуске
+sys.dont_write_bytecode = True
+
 from typing import Dict
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSlot
@@ -25,12 +38,20 @@ class MainWindow(MSFluentWindow):
     def __init__(self):
         super().__init__()
         setTheme(Theme.DARK)
+
+        # Пустые заглушки — нужны, чтобы сигналы воркеров и closeEvent
+        # не падали, если окно закроют до завершения ленивой инициализации.
+        self._metrics: Dict[str, ServerMetrics] = {}
+        self.dashboard_page = None
+        self._ping_manager = None
+        self._online_worker = None
+        self._refresh_timer = None
+
         self._setup_window()
-        self._init_metrics()
-        self._init_pages()
-        self._init_navigation()
-        self._init_workers()
-        self._init_refresh_timer()
+
+        # Ленивая инициализация (см. main()): тяжёлые страницы/метрики/потоки
+        # создаются через QTimer.singleShot(0, ...) УЖЕ ПОСЛЕ show(),
+        # поэтому окно появляется практически мгновенно после двойного клика.
 
     def _resource_path(self, relative_path):
         """Get absolute path to resource, works for dev and for PyInstaller"""
@@ -153,30 +174,53 @@ class MainWindow(MSFluentWindow):
 
     @pyqtSlot(str)
     def _on_api_error(self, msg):
-        self.dashboard_page.set_error(msg)
+        if self.dashboard_page is not None:
+            self.dashboard_page.set_error(msg)
 
     @pyqtSlot()
     def _push_metrics_to_ui(self):
-        self.dashboard_page.refresh_metrics(self._metrics)
+        if self.dashboard_page is not None:
+            self.dashboard_page.refresh_metrics(self._metrics)
 
     def closeEvent(self, event):
-        self._refresh_timer.stop()
-        self._ping_manager.stop()
-        self._online_worker.stop()
-        
+        # Защита от закрытия до завершения ленивой инициализации
+        if getattr(self, "_refresh_timer", None):
+            self._refresh_timer.stop()
+        if getattr(self, "_ping_manager", None):
+            self._ping_manager.stop()
+        if getattr(self, "_online_worker", None):
+            self._online_worker.stop()
+
         super().closeEvent(event)
 
 
 def main():
     QApplication.setHighDpiScaleFactorRoundingPolicy(
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
+
+    # Показываем окно сразу после создания QApplication, ещё до загрузки
+    # тяжёлых страниц/воркеров — пользователь видит отклик мгновенно.
     app = QApplication(sys.argv)
-    
+
     app.setApplicationName(APP_NAME)
     app.setApplicationVersion(APP_VERSION)
     app.setAttribute(Qt.ApplicationAttribute.AA_DontCreateNativeWidgetSiblings)
+
     window = MainWindow()
     window.show()
+
+    # Все ресурсоёмкие инициализации (метрики, страницы, фоновые потоки, таймеры)
+    # переносим в ленивую загрузку через QTimer.singleShot(0, ...), чтобы окно
+    # появилось как можно быстрее после двойного клика по .exe.
+    def _deferred_init():
+        window._init_metrics()
+        window._init_pages()
+        window._init_navigation()
+        window._init_workers()
+        window._init_refresh_timer()
+
+    QTimer.singleShot(0, _deferred_init)
+
     sys.exit(app.exec())
 
 
