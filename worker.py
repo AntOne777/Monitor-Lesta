@@ -116,16 +116,25 @@ def _ping_system_command(host: str, timeout_s: float = 2.0) -> Optional[float]:
                 continue
         blob = b"\n".join(blobs)
 
+        # Собираем ВСЕ ответы (ping -n 1 выдаёт одну строку «время=Nмс»,
+        # но при увеличении -n берём медиану для устойчивости к выбросам).
+        vals = []
+        for m in _NUM_PAT.finditer(blob):
+            g = next(x for x in m.groups() if x)
+            try:
+                v = float(g.replace(b",", b"."))
+            except ValueError:
+                continue
+            if 0 < v < 10000:
+                vals.append(v)
+
         # "время<..." / "time<1ms" — очень быстрый ответ (<1 мс)
-        if _LT1_PAT.search(blob):
+        if not vals and _LT1_PAT.search(blob):
             return 0.5
 
-        m = _NUM_PAT.search(blob)
-        if m:
-            g = next(x for x in m.groups() if x)
-            val = float(g.replace(b",", b"."))
-            if 0 < val < 10000:
-                return val
+        if vals:
+            vals.sort()
+            return vals[len(vals) // 2]   # медиана
 
         # Reply мог прийти без распознанного числа — НЕ выдумываем значение:
         # возвращаем None, решение за TCP-фолбэком.
